@@ -4,7 +4,8 @@
   vars:
     password: "password"
     login: "root"
-
+    
+######################## Install packages ########################
   tasks:
     - name: Update and upgrade apt packages
       apt:
@@ -34,8 +35,8 @@
         state: latest
         update_cache: true
 
-########## Configure MySQL Server ####################
-    - name: Sets the root password  (only first time)
+######################## Configure MariaDB Server ########################
+    - name: Sets the root password
       mysql_user:
         user: "{{ login }}"
         password: "{{ password }}"
@@ -69,9 +70,9 @@
         login_user: "{{ login }}"
         login_password: "{{ password }}"
 
-############# Create an initial database and a user ############
+######################## Create DB and User ########################
 
-    - name: create a new database
+    - name: Create a new database
       mysql_db:
         name: snipeit_db
         state: present
@@ -92,7 +93,7 @@
         name: mysql
         state: restarted
 
-############ Download Snipe-IT #########################
+######################## Download and configure Snipe-IT ########################
 
     - name: git clone Snipe-IT
       git:
@@ -130,7 +131,7 @@
         path: /home/joos/composer.phar
         state: touch
 
-######################## composer  #########################
+######################## Install Composer  ########################
 
     - name: "Download Installer"
       get_url:
@@ -148,7 +149,8 @@
         chdir: "/var/www/snipeit"
         creates: "/var/www/snipeit/vendor"
       become: true
-######################## Nginx  #########################
+
+######################## Configure nginx  ########################
 
     - name: Copy config
       copy:
