@@ -1,0 +1,175 @@
+---
+- hosts: snipe
+  become: true
+  vars:
+    password: "password"
+    login: "root"
+
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        upgrade: yes
+        update_cache: yes
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - nginx
+          - mariadb-server
+          - php-mysql
+          - php-fpm
+          - git
+          - unzip
+          - php
+          - php-curl
+          - php-gd
+          - php-ldap
+          - php-zip
+          - php-mbstring
+          - php-xml
+          - php-bcmath
+          - php-tokenizer
+          - python3-pip
+          - python3-mysqldb
+        state: latest
+        update_cache: true
+
+########## Configure MySQL Server ####################
+    - name: Sets the root password  (only first time)
+      mysql_user:
+        user: "{{ login }}"
+        password: "{{ password }}"
+      ignore_errors: yes
+    
+    - name: Delete anonymous user for localhost
+      mysql_user:
+        user: ""
+        state: "absent"
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+
+    - name: Secures the MySQL root user for IPV4 localhost (127.0.0.1)
+      mysql_user:
+        user: "{{ login }}"
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+        host: "127.0.0.1"
+
+    - name: Secures the MySQL root user for localhost domain (localhost)
+      mysql_user:
+        user: "{{ login }}"
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+        host: "localhost"
+
+    - name: Removes the MySQL test database
+      mysql_db: 
+        db: test
+        state: absent
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+
+############# Create an initial database and a user ############
+
+    - name: create a new database
+      mysql_db:
+        name: snipeit_db
+        state: present
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+
+    - name: Create database user
+      mysql_user:
+        name: snipeit_user
+        password: "{{ password }}"
+        priv: 'snipeit_db.*:ALL'
+        state: present
+        login_user: "{{ login }}"
+        login_password: "{{ password }}"
+
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted
+
+############ Download Snipe-IT #########################
+
+    - name: git clone Snipe-IT
+      git:
+        repo: 'https://github.com/snipe/snipe-it'
+        dest: /var/www/snipeit
+        clone: yes
+      ignore_errors: yes
+
+    - name: Copy config
+      copy:
+        src: .env
+        dest: /var/www/snipeit/.env
+
+    - name: Change file owner
+      file:
+        path: /var/www/snipeit/
+        recurse: yes
+        owner: "www-data"
+        group: "www-data"
+
+    - name: Change storage permission
+      file:
+        path: /var/www/snipeit/storage
+        recurse: yes
+        mode: '755'
+
+    - name: Change uploads permission
+      file:
+        path: /var/www/snipeit/public/uploads
+        recurse: yes
+        mode: '755'
+
+    - name: Create composer.phar
+      file:
+        path: /home/joos/composer.phar
+        state: touch
+
+######################## composer  #########################
+
+    - name: "Download Installer"
+      get_url:
+        url: "https://getcomposer.org/installer"
+        dest: "/home/joos/installer"
+        mode: '0755'
+
+    - name: "Start installer - very long"
+      command:
+        cmd: "php /home/joos/installer"
+
+    - name: Install snipe dependencies
+      shell: "export COMPOSER_ALLOW_SUPERUSER=1; php8.1 /home/joos/composer.phar install --no-dev --prefer-source"
+      args:
+        chdir: "/var/www/snipeit"
+        creates: "/var/www/snipeit/vendor"
+      become: true
+######################## Nginx  #########################
+
+    - name: Copy config
+      copy:
+        src: inventur.dsm
+        dest: /etc/nginx/sites-available/inventur.dsm
+
+    - name: Create symbolic link
+      file:
+        src: /etc/nginx/sites-available/inventur.dsm
+        dest: /etc/nginx/sites-enabled/inventur.dsm
+        state: link
+
+    - name: remove link
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
+
+
+

@@ -1,0 +1,108 @@
+---
+- hosts: snipe
+  become: true
+  tasks:
+  ############# Install Docker + ##############################################
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - python3-pip
+          - virtualenv
+          - gnupg
+          - lsb-release
+        state: latest
+        update_cache: true
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: remove EXTERNALLY-MANAGED if we're on debian12
+      ansible.builtin.file:
+        path: /usr/lib/python3.11/EXTERNALLY-MANAGED
+        state: absent
+      when: ansible_distribution == "Debian"
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+        
+#############################################################################
+
+    - name: Update and upgrade apt packages
+      apt:
+        upgrade: yes
+        update_cache: yes
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /var/config
+        - /var/config/snipeit
+        - /var/config/snipeit/snipe-mysql
+        - /var/config/snipeit/snipe-conf
+        - /var/config/snipeit/snipe-backup
+
+
+    - name: MySQL container
+      docker_container:
+        name: snipe-mysql
+        image: mysql:5.6
+        volumes:
+          - /var/config/snipeit/snipe-mysql:/var/lib/mysql
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: snipe
+          MYSQL_USER: snipe
+          MYSQL_PASSWORD: password
+          TZ: Europe/Moscow
+        restart: yes
+
+    - name: Snipe-IT container
+      docker_container:
+        name: snipe-it
+        image: snipe/snipe-it 
+        links:
+          - snipe-mysql
+        volumes:
+          - /var/config/snipeit/snipe-conf:/config
+          - /var/config/snipeit/snipe-backup:/var/www/html/storage/app/backups
+        ports:
+          - 8082:80
+        env:
+          PUID: '1000'
+          PGID: '1000'
+          DB_CONNECTION: mysql
+          DB_HOST: snipe-mysql
+          DB_DATABASE: snipe
+          DB_USERNAME: snipe
+          DB_PASSWORD: password
+          APP_KEY: KEY
+        restart: yes
+
+#############################################################################
