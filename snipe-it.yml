@@ -4,9 +4,25 @@
   vars:
     password: "password"
     login: "root"
-    
-######################## Install packages ########################
+    user: "support"
+    release: "bookworm"
   tasks:
+######################## Add PHP Repo ########################
+
+    - name: Add PHP GPG key
+      ansible.builtin.get_url:
+        url: https://packages.sury.org/php/apt.gpg
+        dest: /etc/apt/trusted.gpg.d/php.gpg
+        mode: '0644'
+        force: true
+
+    - name: Add PHP repo
+      ansible.builtin.apt_repository:
+        filename: php.list
+        repo: 'deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg] https://packages.sury.org/php/ {{ release }} main'   
+
+######################## Install packages ########################
+
     - name: Update and upgrade apt packages
       apt:
         upgrade: yes
@@ -17,19 +33,19 @@
         pkg:
           - nginx
           - mariadb-server
-          - php-mysql
-          - php-fpm
+          - php8.1
+          - php8.1-mysql
+          - php8.1-fpm
           - git
           - unzip
-          - php
-          - php-curl
-          - php-gd
-          - php-ldap
-          - php-zip
-          - php-mbstring
-          - php-xml
-          - php-bcmath
-          - php-tokenizer
+          - php8.1-curl
+          - php8.1-gd
+          - php8.1-ldap
+          - php8.1-zip
+          - php8.1-mbstring
+          - php8.1-xml
+          - php8.1-bcmath
+          - php8.1-tokenizer
           - python3-pip
           - python3-mysqldb
         state: latest
@@ -128,7 +144,7 @@
 
     - name: Create composer.phar
       file:
-        path: /home/joos/composer.phar
+        path: /home/{{ user }}/composer.phar
         state: touch
 
 ######################## Install Composer  ########################
@@ -136,15 +152,15 @@
     - name: "Download Installer"
       get_url:
         url: "https://getcomposer.org/installer"
-        dest: "/home/joos/installer"
+        dest: "/home/{{ user }}/installer"
         mode: '0755'
 
     - name: "Start installer - very long"
       command:
-        cmd: "php /home/joos/installer"
+        cmd: "php8.1 /home/{{ user }}/installer"
 
     - name: Install snipe dependencies
-      shell: "export COMPOSER_ALLOW_SUPERUSER=1; php8.1 /home/joos/composer.phar install --no-dev --prefer-source"
+      shell: "export COMPOSER_ALLOW_SUPERUSER=1; php8.1 /home/{{ user }}/composer.phar install --no-dev --prefer-source"
       args:
         chdir: "/var/www/snipeit"
         creates: "/var/www/snipeit/vendor"
@@ -172,6 +188,3 @@
       service:
         name: nginx
         state: restarted
-
-
-
